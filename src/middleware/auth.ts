@@ -1,46 +1,39 @@
-import type { Middleware } from "waku/config";
 import { getSession } from "../auth";
 import { getSessionCookie } from "better-auth/cookies";
+import type { MiddlewareHandler } from "hono";
+import { unstable_getContextData as getContextData } from "waku/server";
 
-const authMiddleware: Middleware = () => {
-  return async (ctx, next) => {
-    const sessionCookie = getSessionCookie(
-      new Request(ctx.req.url, {
-        body: ctx.req.body,
-        headers: ctx.req.headers,
-        method: ctx.req.method,
-      })
-    );
+const authMiddleware: () => MiddlewareHandler = () => {
+  return async (c, next) => {
+    const reqUrl = new URL(c.req.url);
+    const sessionCookie = getSessionCookie(c.req.raw);
     // THIS IS NOT SECURE!
     // This is the recommended approach to optimistically redirect users
     // We recommend handling auth checks in each page/route
-    if (!sessionCookie && ctx.req.url.pathname !== "/") {
-      if (!ctx.req.url.pathname.endsWith(".txt")) {
+    if (
+      !sessionCookie &&
+      reqUrl.pathname !== "/" &&
+      !reqUrl.pathname.startsWith("/api")
+    ) {
+      if (!reqUrl.pathname.endsWith(".txt")) {
         // Currently RSC requests end in .txt and don't handle redirect responses
         // The redirect needs to be encoded in the React flight stream somehow
         // There is some functionality in Waku to do this from a server component
         // but not from middleware.
-        ctx.res.status = 302;
-        ctx.res.headers = {
-          Location: new URL("/", ctx.req.url).toString(),
-        };
+        return c.redirect("/", 302);
       }
     }
 
-    // TODO possible to inspect ctx.req.url and not do this on every request
+    // TODO possible to inspect c.req.url and not do this on every request
     // Or skip starting the promise here and just invoke from server components and functions
     getSession();
     await next();
-    if (ctx.data.betterAuthSetCookie) {
-      ctx.res.headers ||= {};
-      let origSetCookie = ctx.res.headers["set-cookie"] || ([] as string[]);
-      if (typeof origSetCookie === "string") {
-        origSetCookie = [origSetCookie];
-      }
-      ctx.res.headers["set-cookie"] = [
-        ...origSetCookie,
-        ctx.data.betterAuthSetCookie as string,
-      ];
+    const contextData = getContextData();
+    const betterAuthSetCookie = contextData.betterAuthSetCookie as
+      | string
+      | undefined;
+    if (betterAuthSetCookie) {
+      c.header("set-cookie", betterAuthSetCookie, { append: true });
     }
   };
 };

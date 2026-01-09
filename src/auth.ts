@@ -1,8 +1,11 @@
 import { betterAuth, BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
 import Database from "better-sqlite3";
-import { getContext, getContextData } from "waku/middleware/context";
 import { Session } from "./lib/auth-client";
+import {
+  unstable_getContext as getContext,
+  unstable_getContextData as getContextData,
+} from "waku/server";
 
 // Other database adapters and options are available
 // https://www.better-auth.com/docs/installation#configure-database
